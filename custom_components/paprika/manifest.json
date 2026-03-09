@@ -1,0 +1,10 @@
+{
+  "domain": "paprika",
+  "name": "Paprika Recipe Manager",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/gneely/ha-paprika",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "1.0.0"
+}
