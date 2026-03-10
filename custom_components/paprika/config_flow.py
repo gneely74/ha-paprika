@@ -8,10 +8,23 @@ from typing import Any
 import aiohttp
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_EMAIL, CONF_PASSWORD, DOMAIN
+from .const import (
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    MAX_SCAN_INTERVAL,
+    MIN_SCAN_INTERVAL,
+)
 from .paprika_api import PaprikaApi, PaprikaAuthError
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,6 +41,13 @@ class PaprikaConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Paprika."""
 
     VERSION = 1
+
+    @staticmethod
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> PaprikaOptionsFlow:
+        """Get the options flow handler."""
+        return PaprikaOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -63,4 +83,34 @@ class PaprikaConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=DATA_SCHEMA,
             errors=errors,
+        )
+
+
+class PaprikaOptionsFlow(OptionsFlow):
+    """Handle options for Paprika."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the scan interval option."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        current = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SCAN_INTERVAL, default=current
+                    ): vol.All(
+                        int,
+                        vol.Range(
+                            min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL
+                        ),
+                    ),
+                }
+            ),
         )
