@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, MEAL_TYPES
 from .coordinator import PaprikaCoordinator
@@ -74,7 +75,7 @@ class PaprikaMealPlanCalendar(
     def event(self) -> CalendarEvent | None:
         """Return the next upcoming event (used for the entity state)."""
         try:
-            now = datetime.now()
+            now = dt_util.now()
             # Check today and the next 7 days for an upcoming event.
             for day_offset in range(8):
                 target = now.date() + timedelta(days=day_offset)
@@ -130,10 +131,11 @@ class PaprikaMealPlanCalendar(
         meal_name = meal.get("name") or "(unnamed)"
         type_label = MEAL_TYPES.get(meal_type, "Meal")
         start_t, end_t = MEAL_TIMES.get(meal_type, DEFAULT_MEAL_TIMES)
+        tz = dt_util.DEFAULT_TIME_ZONE
         return CalendarEvent(
             summary=f"{type_label}: {meal_name}",
-            start=datetime.combine(meal_date, start_t),
-            end=datetime.combine(meal_date, end_t),
+            start=datetime.combine(meal_date, start_t, tzinfo=tz),
+            end=datetime.combine(meal_date, end_t, tzinfo=tz),
         )
 
     def _events_for_date(self, target: date) -> list[CalendarEvent]:
