@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+import logging
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
@@ -14,6 +15,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MEAL_TYPES
 from .coordinator import PaprikaCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 # Default start/end times for each meal type so events show at sensible slots.
 MEAL_TIMES: dict[int, tuple[time, time]] = {
@@ -32,6 +35,10 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Paprika meal plan calendar."""
     coordinator: PaprikaCoordinator = hass.data[DOMAIN][entry.entry_id]
+    _LOGGER.debug(
+        "Setting up Paprika calendar, coordinator has %d meals",
+        len((coordinator.data or {}).get("meals", [])),
+    )
     async_add_entities([PaprikaMealPlanCalendar(coordinator, entry)])
 
 
@@ -66,15 +73,19 @@ class PaprikaMealPlanCalendar(
     @property
     def event(self) -> CalendarEvent | None:
         """Return the next upcoming event (used for the entity state)."""
-        now = datetime.now()
-        today_events = self._events_for_date(now.date())
-        # Find the first event that hasn't ended yet.
-        for ev in today_events:
-            if ev.end and datetime.combine(now.date(), time()) <= now:
-                continue
-            return ev
-        # If all today's events have passed, just return the first one.
-        return today_events[0] if today_events else None
+        try:
+            now = datetime.now()
+            # Check today and the next 7 days for an upcoming event.
+            for day_offset in range(8):
+                target = now.date() + timedelta(days=day_offset)
+                for ev in self._events_for_date(target):
+                    if ev.end and ev.end < now:
+                        continue
+                    return ev
+            return None
+        except Exception:
+            _LOGGER.exception("Error computing next Paprika calendar event")
+            return None
 
     async def async_get_events(
         self,
@@ -85,12 +96,15 @@ class PaprikaMealPlanCalendar(
         """Return calendar events within the requested window."""
         events: list[CalendarEvent] = []
         for meal in self._meals():
-            meal_date = self._parse_meal_date(meal)
-            if meal_date is None:
-                continue
-            if meal_date < start_date.date() or meal_date > end_date.date():
-                continue
-            events.append(self._meal_to_event(meal, meal_date))
+            try:
+                meal_date = self._parse_meal_date(meal)
+                if meal_date is None:
+                    continue
+                if meal_date < start_date.date() or meal_date > end_date.date():
+                    continue
+                events.append(self._meal_to_event(meal, meal_date))
+            except Exception:
+                _LOGGER.debug("Skipping unparseable meal entry: %s", meal)
         return sorted(events, key=lambda e: e.start)
 
     # ── Helpers ──────────────────────────────────────────────────────
